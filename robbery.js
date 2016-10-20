@@ -11,7 +11,9 @@ var MS_IN_HOUR = 1000 * 60 * 60;
 var MS_IN_DAY = MS_IN_HOUR * 24;
 
 function createDate(day, hours, minutes) {
-    return new Date(Date.UTC(0, 0, day, hours, minutes));
+    // тут 1973 год подобран, чтоб первое января был понедельник :)
+    // а day + 1 это потому, что нулевой день -- на самом деле день пред. месяца.
+    return new Date(Date.UTC(73, 0, day + 1, hours, minutes));
 }
 
 function addDaysToDate(date, days) {
@@ -34,7 +36,7 @@ function parseTimeFromString(string) {
     return createDate(day, hour - utc, minutes);
 }
 
-function parseSchedule(schedule) {
+function unionSchedule(schedule) {
     var result = [];
     Object.keys(schedule).forEach(function (personSchedule) {
         result = result.concat(schedule[personSchedule]);
@@ -50,7 +52,7 @@ function parseInterval(interval) {
     };
 }
 
-function getBusyIntervalsForBank(bankTimeInterval, bankUtc) {
+function getIntervalsWhenBankClosed(bankTimeInterval, bankUtc) {
     var result = [];
     for (var i = 0; i < DAYS_OF_WEEK.length; i++) {
         result.push(
@@ -68,7 +70,7 @@ function getBusyIntervalsForBank(bankTimeInterval, bankUtc) {
     return result;
 }
 
-function startTimeComparator(firstInterval, secondInterval) {
+function ascendingStartTimeComparator(firstInterval, secondInterval) {
     if (firstInterval.from < secondInterval.from) {
         return -1;
     }
@@ -84,7 +86,7 @@ function canPlaceTimeInInterval(fromTime, toTime, minutes) {
 }
 
 function getEarliestMoment(busyList, duration, startTime, endTime) {
-    busyList.sort(startTimeComparator);
+    busyList.sort(ascendingStartTimeComparator);
     for (var i in busyList) {
         if (endTime < startTime) {
             return null;
@@ -101,6 +103,24 @@ function getEarliestMoment(busyList, duration, startTime, endTime) {
     return null;
 }
 
+function prettifyTime(time, template) {
+    // getDay() возвращает для воскресенья 0: не комфильфо. Посему делаем -1
+    var day = time.getDay() % 7 - 1;
+    var hours = time.getHours().toString();
+    var minutes = time.getMinutes().toString();
+    if (hours.length === 1) {
+        hours = '0' + hours;
+    }
+    if (minutes.length === 1) {
+        minutes = '0' + minutes;
+    }
+
+    return template
+        .replace('%DD', DAYS_OF_WEEK[day])
+        .replace('%HH', hours)
+        .replace('%MM', minutes);
+}
+
 /**
  * @param {Object} schedule – Расписание Банды
  * @param {Number} duration - Время на ограбление в минутах
@@ -115,11 +135,11 @@ exports.getAppropriateMoment = function (schedule, duration, workingHours) {
     var bankUtc = getUtcFromTime(workingHours.from);
     var bankInterval = parseInterval(workingHours);
     var busyList = [];
-    var bankBusyIntervals = getBusyIntervalsForBank(bankInterval, bankUtc);
+    var bankBusyIntervals = getIntervalsWhenBankClosed(bankInterval, bankUtc);
     var startTime = bankBusyIntervals[0].from;
     var endTime = bankBusyIntervals[bankBusyIntervals.length - 1].to;
 
-    parseSchedule(schedule).forEach(function (interval) {
+    unionSchedule(schedule).forEach(function (interval) {
         busyList.push(parseInterval(interval));
     });
 
@@ -152,20 +172,8 @@ exports.getAppropriateMoment = function (schedule, duration, workingHours) {
             if (!this.exists()) {
                 return '';
             }
-            var day = this.currentMoment.getDay() % 7;
-            var hours = this.currentMoment.getHours().toString();
-            var minutes = this.currentMoment.getMinutes().toString();
-            if (hours.length === 1) {
-                hours = '0' + hours;
-            }
-            if (minutes.length === 1) {
-                minutes = '0' + minutes;
-            }
 
-            return template
-                .replace('%DD', DAYS_OF_WEEK[day])
-                .replace('%HH', hours)
-                .replace('%MM', minutes);
+            return prettifyTime(this.currentMoment, template);
         },
 
         /**
