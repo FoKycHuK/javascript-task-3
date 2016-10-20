@@ -16,8 +16,8 @@ function createDate(day, hours, minutes) {
     return new Date(Date.UTC(73, 0, day + 1, hours, minutes));
 }
 
-function addDaysToDate(date, days) {
-    var msToAdd = days * MS_IN_DAY;
+function addToDate(date, days, hours) {
+    var msToAdd = days * MS_IN_DAY + hours * MS_IN_HOUR;
 
     return new Date(date.getTime() + msToAdd);
 }
@@ -58,11 +58,11 @@ function getIntervalsWhenBankClosed(bankTimeInterval, bankUtc) {
         result.push(
             {
                 from: createDate(i, -bankUtc, 0),
-                to: addDaysToDate(bankTimeInterval.from, i)
+                to: addToDate(bankTimeInterval.from, i, 0)
             });
         result.push(
             {
-                from: addDaysToDate(bankTimeInterval.to, i),
+                from: addToDate(bankTimeInterval.to, i, 0),
                 to: createDate(i + 1, -bankUtc, 0)
             });
     }
@@ -103,11 +103,12 @@ function getEarliestMoment(busyList, duration, startTime, endTime) {
     return null;
 }
 
-function prettifyTime(time, template) {
+function prettifyTime(time, template, bankUtc) {
     // getDay() возвращает для воскресенья 0: не комфильфо. Посему делаем -1
-    var day = time.getDay() % 7 - 1;
-    var hours = time.getHours().toString();
-    var minutes = time.getMinutes().toString();
+    time = addToDate(time, 0, bankUtc);
+    var day = time.getUTCDay() % 7 - 1;
+    var hours = time.getUTCHours().toString();
+    var minutes = time.getUTCMinutes().toString();
     if (hours.length === 1) {
         hours = '0' + hours;
     }
@@ -152,6 +153,7 @@ exports.getAppropriateMoment = function (schedule, duration, workingHours) {
         currentMoment: momentToAttack,
         endTime: endTime,
         duration: duration,
+        bankUtc: bankUtc,
 
         /**
          * Найдено ли время
@@ -173,7 +175,7 @@ exports.getAppropriateMoment = function (schedule, duration, workingHours) {
                 return '';
             }
 
-            return prettifyTime(this.currentMoment, template);
+            return prettifyTime(this.currentMoment, template, this.bankUtc);
         },
 
         /**
