@@ -6,29 +6,31 @@
  */
 exports.isStar = true;
 
-var DAYS_OF_WEEK = ['ПН', 'ВТ', 'СР'];
-var MS_IN_HOUR = 1000 * 60 * 60;
+var BANK_WORKING_DAYS = ['ПН', 'ВТ', 'СР'];
+var MS_IN_MINUTE = 1000 * 60;
+var MS_IN_HOUR = MS_IN_MINUTE * 60;
 var MS_IN_DAY = MS_IN_HOUR * 24;
 
 function createDate(day, hours, minutes) {
     // тут 1973 год подобран, чтоб первое января был понедельник :)
     // а day + 1 это потому, что нулевой день -- на самом деле день пред. месяца.
+    // таким образом, при вызове этого метода с аргументами (0,0,0) мы получим ПН 00:00+0
     return new Date(Date.UTC(73, 0, day + 1, hours, minutes));
 }
 
-function addToDate(date, days, hours) {
-    var msToAdd = days * MS_IN_DAY + hours * MS_IN_HOUR;
+function addToDate(date, days, hours, minutes) {
+    var msToAdd = days * MS_IN_DAY + hours * MS_IN_HOUR + minutes * MS_IN_MINUTE;
 
     return new Date(date.getTime() + msToAdd);
 }
 
-function getUtcFromTime(string) {
+function parseTimeZoneFromString(string) {
     return parseInt(/\+(\d+)/.exec(string)[1]);
 }
 
-function parseTimeFromString(string) {
+function parseUtcTimeFromString(string) {
     var groups = /([А-Я]*)\s*(\d\d):(\d\d)\+(\d+)/.exec(string);
-    var day = groups[1] ? DAYS_OF_WEEK.indexOf(groups[1]) : 0;
+    var day = groups[1] ? BANK_WORKING_DAYS.indexOf(groups[1]) : 0;
     var hour = parseInt(groups[2]);
     var minutes = parseInt(groups[3]);
     var utc = parseInt(groups[4]);
@@ -45,25 +47,25 @@ function unionSchedule(schedule) {
     return result;
 }
 
-function parseInterval(interval) {
+function parseTimeInterval(interval) {
     return {
-        from: parseTimeFromString(interval.from),
-        to: parseTimeFromString(interval.to)
+        from: parseUtcTimeFromString(interval.from),
+        to: parseUtcTimeFromString(interval.to)
     };
 }
 
-function getIntervalsWhenBankClosed(bankTimeInterval, bankUtc) {
+function getIntervalsWhenBankClosed(bankTimeInterval, bankTimeZone) {
     var result = [];
-    for (var i = 0; i < DAYS_OF_WEEK.length; i++) {
+    for (var i = 0; i < BANK_WORKING_DAYS.length; i++) {
         result.push(
             {
-                from: createDate(i, -bankUtc, 0),
-                to: addToDate(bankTimeInterval.from, i, 0)
+                from: createDate(i, -bankTimeZone, 0),
+                to: addToDate(bankTimeInterval.from, i, 0, 0)
             });
         result.push(
             {
-                from: addToDate(bankTimeInterval.to, i, 0),
-                to: createDate(i + 1, -bankUtc, 0)
+                from: addToDate(bankTimeInterval.to, i, 0, 0),
+                to: createDate(i + 1, -bankTimeZone, 0)
             });
     }
 
@@ -82,13 +84,13 @@ function ascendingStartTimeComparator(firstInterval, secondInterval) {
 }
 
 function canPlaceTimeInInterval(fromTime, toTime, minutes) {
-    return toTime - fromTime >= minutes * 60 * 1000;
+    return toTime - fromTime >= minutes * MS_IN_MINUTE;
 }
 
 function getEarliestMoment(busyList, duration, startTime, endTime) {
     busyList.sort(ascendingStartTimeComparator);
     for (var i in busyList) {
-        if (endTime < startTime) {
+        if (endTime <= startTime) {
             return null;
         }
         var currentInterval = busyList[i];
@@ -103,9 +105,9 @@ function getEarliestMoment(busyList, duration, startTime, endTime) {
     return null;
 }
 
-function prettifyTime(time, template, bankUtc) {
+function prettifyTime(time, template, bankTimeZone) {
+    time = addToDate(time, 0, bankTimeZone, 0);
     // getDay() возвращает для воскресенья 0: не комфильфо. Посему делаем -1
-    time = addToDate(time, 0, bankUtc);
     var day = time.getUTCDay() % 7 - 1;
     var hours = time.getUTCHours().toString();
     var minutes = time.getUTCMinutes().toString();
@@ -117,7 +119,7 @@ function prettifyTime(time, template, bankUtc) {
     }
 
     return template
-        .replace('%DD', DAYS_OF_WEEK[day])
+        .replace('%DD', BANK_WORKING_DAYS[day])
         .replace('%HH', hours)
         .replace('%MM', minutes);
 }
@@ -131,20 +133,16 @@ function prettifyTime(time, template, bankUtc) {
  * @returns {Object}
  */
 exports.getAppropriateMoment = function (schedule, duration, workingHours) {
-    // console.info(schedule, duration, workingHours);
+    var bankTimeZone = parseTimeZoneFromString(workingHours.from);
+    var bankInterval = parseTimeInterval(workingHours);
+    var bankBusyIntervals = getIntervalsWhenBankClosed(bankInterval, bankTimeZone);
 
-    var bankUtc = getUtcFromTime(workingHours.from);
-    var bankInterval = parseInterval(workingHours);
-    var busyList = [];
-    var bankBusyIntervals = getIntervalsWhenBankClosed(bankInterval, bankUtc);
+    var busyList = unionSchedule(schedule)
+        .map(parseTimeInterval)
+        .concat(bankBusyIntervals);
+
     var startTime = bankBusyIntervals[0].from;
     var endTime = bankBusyIntervals[bankBusyIntervals.length - 1].to;
-
-    unionSchedule(schedule).forEach(function (interval) {
-        busyList.push(parseInterval(interval));
-    });
-
-    busyList = busyList.concat(bankBusyIntervals);
 
     var momentToAttack = getEarliestMoment(busyList, duration, startTime, endTime);
 
@@ -153,7 +151,7 @@ exports.getAppropriateMoment = function (schedule, duration, workingHours) {
         currentMoment: momentToAttack,
         endTime: endTime,
         duration: duration,
-        bankUtc: bankUtc,
+        bankTimeZone: bankTimeZone,
 
         /**
          * Найдено ли время
@@ -175,7 +173,7 @@ exports.getAppropriateMoment = function (schedule, duration, workingHours) {
                 return '';
             }
 
-            return prettifyTime(this.currentMoment, template, this.bankUtc);
+            return prettifyTime(this.currentMoment, template, this.bankTimeZone);
         },
 
         /**
@@ -188,7 +186,7 @@ exports.getAppropriateMoment = function (schedule, duration, workingHours) {
                 return false;
             }
 
-            var nextStartTime = new Date(this.currentMoment.getTime() + MS_IN_HOUR / 2);
+            var nextStartTime = addToDate(this.currentMoment, 0, 0, 30);
             var newMoment = getEarliestMoment(
                 this.busyList, this.duration, nextStartTime, this.endTime);
             if (!newMoment) {
