@@ -13,7 +13,7 @@ var MS_IN_DAY = MS_IN_HOUR * 24;
 
 function createDate(day, hours, minutes) {
     // тут 1973 год подобран, чтоб первое января был понедельник :)
-    // а day + 1 это потому, что нулевой день -- на самом деле день пред. месяца.
+    // а day + 1 это потому, что нулевой день -- на самом деле день предыдущего месяца.
     // таким образом, при вызове этого метода с аргументами (0,0,0) мы получим ПН 00:00+0
     return new Date(Date.UTC(73, 0, day + 1, hours, minutes));
 }
@@ -25,15 +25,15 @@ function addToDate(date, days, hours, minutes) {
 }
 
 function parseTimeZoneFromString(string) {
-    return parseInt(/\+(\d+)/.exec(string)[1]);
+    return parseInt(/\+(\d+)/.exec(string)[1], 10);
 }
 
 function parseUtcTimeFromString(string) {
     var groups = /([А-Я]*)\s*(\d\d):(\d\d)\+(\d+)/.exec(string);
     var day = groups[1] ? BANK_WORKING_DAYS.indexOf(groups[1]) : 0;
-    var hour = parseInt(groups[2]);
-    var minutes = parseInt(groups[3]);
-    var utc = parseInt(groups[4]);
+    var hour = parseInt(groups[2], 10);
+    var minutes = parseInt(groups[3], 10);
+    var utc = parseInt(groups[4], 10);
 
     return createDate(day, hour - utc, minutes);
 }
@@ -72,23 +72,14 @@ function getIntervalsWhenBankClosed(bankTimeInterval, bankTimeZone) {
     return result;
 }
 
-function ascendingStartTimeComparator(firstInterval, secondInterval) {
-    if (firstInterval.from < secondInterval.from) {
-        return -1;
-    }
-    if (firstInterval.from > secondInterval.from) {
-        return 1;
-    }
-
-    return 0;
-}
-
 function canPlaceTimeInInterval(fromTime, toTime, minutes) {
     return toTime - fromTime >= minutes * MS_IN_MINUTE;
 }
 
 function getEarliestMoment(busyList, duration, startTime, endTime) {
-    busyList.sort(ascendingStartTimeComparator);
+    busyList.sort(function (firstInterval, secondInterval) {
+        return Math.sign(firstInterval.from - secondInterval.from);
+    });
     for (var i in busyList) {
         if (endTime <= startTime) {
             return null;
@@ -106,11 +97,11 @@ function getEarliestMoment(busyList, duration, startTime, endTime) {
 }
 
 function prettifyTime(time, template, bankTimeZone) {
-    time = addToDate(time, 0, bankTimeZone, 0);
+    var timeInBankTimeZone = addToDate(time, 0, bankTimeZone, 0);
     // getDay() возвращает для воскресенья 0: не комфильфо. Посему делаем -1
-    var day = time.getUTCDay() % 7 - 1;
-    var hours = time.getUTCHours().toString();
-    var minutes = time.getUTCMinutes().toString();
+    var day = timeInBankTimeZone.getUTCDay() % 7 - 1;
+    var hours = timeInBankTimeZone.getUTCHours().toString();
+    var minutes = timeInBankTimeZone.getUTCMinutes().toString();
     if (hours.length === 1) {
         hours = '0' + hours;
     }
