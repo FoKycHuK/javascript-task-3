@@ -11,10 +11,10 @@ var MS_IN_MINUTE = 1000 * 60;
 var MS_IN_HOUR = MS_IN_MINUTE * 60;
 var MS_IN_DAY = MS_IN_HOUR * 24;
 
+/* Тут 1973 год подобран, чтоб первое января был понедельник :)
+   а day + 1 это потому, что нулевой день -- на самом деле день предыдущего месяца.
+   Таким образом, при вызове этого метода с аргументами (0,0,0) мы получим ПН 00:00+0 */
 function createDate(day, hours, minutes) {
-    // тут 1973 год подобран, чтоб первое января был понедельник :)
-    // а day + 1 это потому, что нулевой день -- на самом деле день предыдущего месяца.
-    // таким образом, при вызове этого метода с аргументами (0,0,0) мы получим ПН 00:00+0
     return new Date(Date.UTC(73, 0, day + 1, hours, minutes));
 }
 
@@ -61,12 +61,12 @@ function getIntervalsWhenBankClosed(bankTimeInterval, bankTimeZone) {
             {
                 from: createDate(i, -bankTimeZone, 0),
                 to: addToDate(bankTimeInterval.from, i, 0, 0)
-            });
-        result.push(
+            },
             {
                 from: addToDate(bankTimeInterval.to, i, 0, 0),
                 to: createDate(i + 1, -bankTimeZone, 0)
-            });
+            }
+        );
     }
 
     return result;
