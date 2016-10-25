@@ -29,7 +29,7 @@ function parseTimeZoneFromString(string) {
 }
 
 function parseUtcTimeFromString(string) {
-    var groups = /([А-Я]*)\s*(\d\d):(\d\d)\+(\d+)/.exec(string);
+    var groups = /([А-Я]*)\s*(\d{2}):(\d{2})\+(\d+)/.exec(string);
     var day = groups[1] ? BANK_WORKING_DAYS.indexOf(groups[1]) : 0;
     var hour = parseInt(groups[2], 10);
     var minutes = parseInt(groups[3], 10);
@@ -39,12 +39,9 @@ function parseUtcTimeFromString(string) {
 }
 
 function unionSchedule(schedule) {
-    var result = [];
-    Object.keys(schedule).forEach(function (personSchedule) {
-        result = result.concat(schedule[personSchedule]);
-    });
-
-    return result;
+    return Object.keys(schedule).reduce(function (acc, current) {
+        return acc.concat(schedule[current]);
+    }, []);
 }
 
 function parseTimeInterval(interval) {
@@ -55,9 +52,8 @@ function parseTimeInterval(interval) {
 }
 
 function getIntervalsWhenBankClosed(bankTimeInterval, bankTimeZone) {
-    var result = [];
-    for (var i = 0; i < BANK_WORKING_DAYS.length; i++) {
-        result.push(
+    return BANK_WORKING_DAYS.reduce(function (acc, _, i) {
+        return acc.concat([
             {
                 from: createDate(i, -bankTimeZone, 0),
                 to: addToDate(bankTimeInterval.from, i, 0, 0)
@@ -65,11 +61,8 @@ function getIntervalsWhenBankClosed(bankTimeInterval, bankTimeZone) {
             {
                 from: addToDate(bankTimeInterval.to, i, 0, 0),
                 to: createDate(i + 1, -bankTimeZone, 0)
-            }
-        );
-    }
-
-    return result;
+            }]);
+    }, []);
 }
 
 function canPlaceTimeInInterval(fromTime, toTime, minutes) {
@@ -80,7 +73,7 @@ function getEarliestMoment(busyList, duration, startTime, endTime) {
     busyList.sort(function (firstInterval, secondInterval) {
         return Math.sign(firstInterval.from - secondInterval.from);
     });
-    for (var i in busyList) {
+    for (var i = 0; i < busyList.length; i++) {
         if (endTime <= startTime) {
             return null;
         }
