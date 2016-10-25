@@ -6,7 +6,8 @@
  */
 exports.isStar = true;
 
-var BANK_WORKING_DAYS = ['ПН', 'ВТ', 'СР'];
+var DAYS_OF_WEEK = ['ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ', 'ВС'];
+var BANK_WORKING_DAYS = DAYS_OF_WEEK.slice(0, 3);
 var MS_IN_MINUTE = 1000 * 60;
 var MS_IN_HOUR = MS_IN_MINUTE * 60;
 var MS_IN_DAY = MS_IN_HOUR * 24;
@@ -30,7 +31,7 @@ function parseTimeZoneFromString(string) {
 
 function parseUtcTimeFromString(string) {
     var groups = /([А-Я]*)\s*(\d{2}):(\d{2})\+(\d+)/.exec(string);
-    var day = groups[1] ? BANK_WORKING_DAYS.indexOf(groups[1]) : 0;
+    var day = groups[1] ? DAYS_OF_WEEK.indexOf(groups[1]) : 0;
     var hour = parseInt(groups[2], 10);
     var minutes = parseInt(groups[3], 10);
     var utc = parseInt(groups[4], 10);
